@@ -1,7 +1,11 @@
 const express = require('express');
-const { create } = require('../controllers/linkController');
+const authMiddleware = require('../middleware/auth');
+const { create, list, remove } = require('../controllers/linkController');
 
 const router = express.Router();
-router.post('/', create);
+
+router.post('/', authMiddleware, create);
+router.get('/', authMiddleware, list);
+router.delete('/:id', authMiddleware, remove);
 
 module.exports = router;
