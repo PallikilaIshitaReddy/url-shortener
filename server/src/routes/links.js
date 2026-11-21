@@ -1,11 +1,18 @@
 const express = require('express');
-const authMiddleware = require('../middleware/auth');
+const auth = require('../middleware/auth');
+const createRateLimiter = require('../middleware/rateLimiter');
 const { create, list, remove } = require('../controllers/linkController');
 
-const router = express.Router();
+const createLinkLimiter = createRateLimiter({
+  prefix: 'create-link',
+  windowSeconds: 60,
+  maxRequests: 20,
+  keyFn: (req) => `user:${req.user.id}`,
+});
 
-router.post('/', authMiddleware, create);
-router.get('/', authMiddleware, list);
-router.delete('/:id', authMiddleware, remove);
+const router = express.Router();
+router.post('/', auth, createLinkLimiter, create);
+router.get('/', auth, list);
+router.delete('/:id', auth, remove);
 
 module.exports = router;
