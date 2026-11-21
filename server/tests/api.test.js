@@ -23,8 +23,7 @@ describe('Week 2 API', () => {
   after(async () => {
     await pool.query('DELETE FROM links WHERE user_id IN (SELECT id FROM users WHERE email IN ($1, $2))', [emailA, emailB]);
     await pool.query('DELETE FROM users WHERE email IN ($1, $2)', [emailA, emailB]);
-    await pool.end();
-  });
+});
 
   it('401 without token, 201 with token', async () => {
     assert.equal((await request(app).post('/api/links').send({ url: 'https://example.com' })).status, 401);
