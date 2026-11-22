@@ -4,6 +4,7 @@ const request = require('supertest');
 require('dotenv').config();
 const app = require('../src/app');
 const pool = require('../src/config/db');
+const redis = require('../src/config/redis');
 
 describe('Week 2 API', () => {
   const emailA = `ua_${Date.now()}@example.com`;
@@ -50,4 +51,9 @@ describe('Week 2 API', () => {
     assert.equal((await request(app).delete(`/api/links/${linkId}`).set('Authorization', `Bearer ${tokenB}`)).status, 403);
     assert.equal((await request(app).delete(`/api/links/${linkId}`).set('Authorization', `Bearer ${tokenA}`)).status, 200);
   });
+});
+
+after(async () => {
+  await redis.quit();
+  await pool.end();
 });
