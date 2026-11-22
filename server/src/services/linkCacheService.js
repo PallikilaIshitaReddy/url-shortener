@@ -33,6 +33,7 @@ async function setCachedLink(shortCode, link) {
     }
 
     const payload = JSON.stringify({
+      id: link.id,
       original_url: link.original_url,
       expires_at: link.expires_at,
       is_active: link.is_active,

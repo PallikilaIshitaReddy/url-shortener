@@ -1,5 +1,7 @@
 const linkService = require('../services/linkService');
 const linkCache = require('../services/linkCacheService');
+const { recordClickAsync } = require('../services/clickService');
+const { getLinkAnalytics } = require('../services/analyticsService');
 const { isValidUrl, validateAlias } = require('../utils/validators');
 
 async function create(req, res, next) {
@@ -66,7 +68,28 @@ async function redirect(req, res, next) {
       return res.status(410).json({ error: 'Link has expired' });
     }
     res.redirect(302, link.original_url);
+    recordClickAsync(req, link.id);
   } catch (err) { next(err); }
 }
 
-module.exports = { create, list, remove, redirect };
+async function analytics(req, res, next) {
+  try {
+    const linkId = Number(req.params.id);
+    if (!Number.isInteger(linkId) || linkId <= 0) {
+      return res.status(400).json({ error: 'Invalid id' });
+    }
+    const link = await linkService.findById(linkId);
+    if (!link) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+    if (String(link.user_id) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const data = await getLinkAnalytics(linkId);
+    res.json({ linkId, ...data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { create, list, remove, redirect, analytics };
