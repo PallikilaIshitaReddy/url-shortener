@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
