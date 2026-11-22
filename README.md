@@ -33,3 +33,14 @@ Node.js, Express, PostgreSQL, and Redis URL shortener with JWT auth, custom alia
 - **k6 Redirect Load Test (`20` VUs, `10s`, `GET /my-github`):**
   - Without Redis cache: `1,247.00 req/s` (`12,485` requests)
   - With Redis cache: `1,277.14 req/s` (`12,786` requests), `p95 = 20.15ms`
+
+## Click Analytics & React Dashboard (Week 4)
+
+- Asynchronous click tracking records `link_id`, `referrer`, `device`, and `country` on both Redis cache hits and PostgreSQL cache misses without blocking redirects.
+- Batched writes flush buffered clicks to PostgreSQL every 5 seconds, at 100 events, or gracefully on `SIGTERM`.
+- `GET /api/links/:id/analytics` enforces authentication and link ownership, returning `totalClicks`, `clicksLast30Days`, `byDevice`, `topReferrers`, and `topCountries` indexed by `idx_clicks_link_time`.
+- React dashboard in `client/` provides Login/Register, link creation with Copy/Delete actions, and Recharts analytics visualizations.
+
+### Screenshots
+- Dashboard: `docs/dashboard.png`
+- Link analytics: `docs/analytics.png`

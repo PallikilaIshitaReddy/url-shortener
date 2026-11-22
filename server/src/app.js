@@ -1,16 +1,18 @@
 const express = require('express');
+const cors = require('cors');
 const authRoutes = require('./routes/auth');
 const linkRoutes = require('./routes/links');
 const redirectRoutes = require('./routes/redirect');
 
 const app = express();
 
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/links', linkRoutes);
-app.use('/', redirectRoutes);   // keep this LAST, because '/:code' matches almost anything
+app.use('/', redirectRoutes); // keep this LAST, because '/:code' matches almost anything
 
 // Central error handler
 app.use((err, req, res, next) => {
