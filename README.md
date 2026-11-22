@@ -1,46 +1,81 @@
-# URL Shortener
+# URL Shortener & Click Analytics
 
-Node.js, Express, PostgreSQL, and Redis URL shortener with JWT auth, custom aliases, link expiration, and link management.
+High-throughput URL shortener with JWT auth, custom aliases, link expiry, Redis caching and rate limiting, batched click analytics, and a React dashboard. **Live Demo:** `<your-frontend-url>` (API: `<your-backend-url>`)
 
-## Endpoints
-- GET /health — Health check
-- POST /api/auth/register — Register (email, password min 8 chars)
-- POST /api/auth/login — Login and receive 1-day JWT (token)
-- POST /api/links — Create link (Bearer token required; supports url, optional alias, optional future ISO expiresAt)
-- GET /api/links — List links owned by the authenticated user (Bearer token required)
-- DELETE /api/links/:id — Delete a link owned by the user (403 if not owner)
-- GET /:code — Redirect (302) or return 410 Gone if expired / 404 if not found
+## Dashboard & Analytics
 
-## Run & Test
-1. docker compose up -d
-2. cd server
-3. npm install
-4. npm run dev
-5. npm test
+- **Dashboard View:** `docs/dashboard.png`
+- **Link Analytics View:** `docs/analytics.png`
 
-## Caching and Rate Limiting (Week 3)
+## Features
 
-- **Redis Redirect Cache (`src/services/linkCacheService.js`):** Caches active, non-expired `GET /:code` lookups in Redis (`shortener-redis`) with TTL capped at link expiry, invalidating cached keys on `DELETE /api/links/:id` and gracefully falling back to PostgreSQL if Redis is unavailable.
-- **Fixed-Window Rate Limiting (`src/middleware/rateLimiter.js`):** Enforces per-user limits on `POST /api/links` (`20` req/min) and per-IP limits on `GET /:code` (`120` req/min) using Redis `INCR` + `EXPIRE`, returning `429 Too Many Requests` with `Retry-After`, `X-RateLimit-Limit`, and `X-RateLimit-Remaining` headers.
-- **k6 Redirect Load Test (`20` VUs, `10s`, `GET /my-github`):**
-  - Without Redis cache: `1,247.00 req/s` (`12,485` requests)
-  - With Redis cache: `1,277.14 req/s` (`12,786` requests), `p95 = 20.15ms`
+- User registration and login with `bcrypt` password hashing and JWT authentication.
+- Short link creation with optional custom aliases, Base62 encoding, and optional expiration timestamps (`expires_at`, returning `410` once expired).
+- Fast `302` redirects backed by Redis caching (including `id` in cached payloads) with cache invalidation on link deletion.
+- Redis-backed rate limiting (`429` + `Retry-After`) on link creation.
+- Asynchronous click tracking (`device` via `ua-parser-js`, `referrer`, `country` via `geoip-lite`, `clicked_at`) for both cache hits and cache misses.
+- Batched PostgreSQL writes flushing every 5 seconds, at 100 queued events, or on `SIGTERM`.
+- Authenticated, owner-only analytics API (`GET /api/links/:id/analytics`) indexed via `idx_clicks_link_time (link_id, clicked_at DESC)`.
+- React dashboard (`client/`) with `/login`, link management (`/`), and Recharts analytics (`/links/:id`).
 
-## Caching and Rate Limiting (Week 3)
+## Performance Results (k6)
 
-- **Redis Redirect Cache (`src/services/linkCacheService.js`):** Caches active, non-expired `GET /:code` lookups in Redis (`shortener-redis`) with TTL capped at link expiry, invalidating cached keys on `DELETE /api/links/:id` and gracefully falling back to PostgreSQL if Redis is unavailable.
-- **Fixed-Window Rate Limiting (`src/middleware/rateLimiter.js`):** Enforces per-user limits on `POST /api/links` (`20` req/min) and per-IP limits on `GET /:code` (`120` req/min) using Redis `INCR` + `EXPIRE`, returning `429 Too Many Requests` with `Retry-After`, `X-RateLimit-Limit`, and `X-RateLimit-Remaining` headers.
-- **k6 Redirect Load Test (`20` VUs, `10s`, `GET /my-github`):**
-  - Without Redis cache: `1,247.00 req/s` (`12,485` requests)
-  - With Redis cache: `1,277.14 req/s` (`12,786` requests), `p95 = 20.15ms`
+> **Note on Free-Tier Hosting:** Free cloud tiers may spin down after idle periods, so the first request after inactivity can experience cold-start delay.
 
-## Click Analytics & React Dashboard (Week 4)
+| Scenario | Workload | Throughput / Iterations | p95 Latency | Notes |
+| --- | --- | --- | --- | --- |
+| Redirect (`loadtest/redirect.js`) | 20 VUs, 10s (with Redis) | 38,609 iterations (~3.86k/s) | `<record p95 ms>` | Cache hit path + async click queue |
+| Redirect (`loadtest/redirect.js`) | 20 VUs, 10s (without Redis) | `<record RPS / result>` | `<record p95 ms>` | Direct DB fallback benchmark |
+| Create Link (`loadtest/create-link.js`) | 10 VUs, 10s | 14,676 iterations (~1.42k/s) | `<record p95 ms>` | Includes `201` / `429` rate-limit responses |
 
-- Asynchronous click tracking records `link_id`, `referrer`, `device`, and `country` on both Redis cache hits and PostgreSQL cache misses without blocking redirects.
-- Batched writes flush buffered clicks to PostgreSQL every 5 seconds, at 100 events, or gracefully on `SIGTERM`.
-- `GET /api/links/:id/analytics` enforces authentication and link ownership, returning `totalClicks`, `clicksLast30Days`, `byDevice`, `topReferrers`, and `topCountries` indexed by `idx_clicks_link_time`.
-- React dashboard in `client/` provides Login/Register, link creation with Copy/Delete actions, and Recharts analytics visualizations.
+- **Test Machine:** `<CPU & RAM specs>`
 
-### Screenshots
-- Dashboard: `docs/dashboard.png`
-- Link analytics: `docs/analytics.png`
+## Architecture Diagram
+
+```text
+  React Dashboard (Vite) ---> Express API ---> Redis (Link Cache + Rate Limiter)
+                                   |
+                        async/batched| sync reads & link/auth writes
+                                   v
+                              PostgreSQL (users, links, clicks)
+```
+
+## Tech Stack
+
+- **Backend:** Node.js, Express, `pg` (PostgreSQL), `ioredis` (Redis), `jsonwebtoken`, `bcrypt`, `cors`, `ua-parser-js`, `geoip-lite`
+- **Frontend:** React, Vite, `axios`, `react-router-dom`, `recharts`
+- **Infrastructure & Testing:** Docker / Docker Compose, `node:test`, `supertest`, `k6`
+
+## Setup Instructions
+
+### Using Docker Compose
+```bash
+docker compose up -d
+```
+
+### Local Development (`npm run dev`)
+```bash
+cd server && npm install && npm run dev
+```
+In a second terminal for the React dashboard:
+```bash
+cd client && npm install && npm run dev
+```
+Run backend tests:
+```bash
+cd server && npm test
+```
+
+## API Endpoints
+
+- `POST /api/auth/register` — Register a new user
+- `POST /api/auth/login` — Authenticate and receive a JWT token
+- `GET /api/links` — List links for the authenticated user
+- `POST /api/links` — Create a short link (rate-limited)
+- `DELETE /api/links/:id` — Delete an owned link and invalidate Redis cache
+- `GET /api/links/:id/analytics` — Owner-only click analytics (`totalClicks`, `clicksLast30Days`, `byDevice`, `topReferrers`, `topCountries`)
+- `GET /:code` — Redirect (`302`) to target URL and record click asynchronously
+
+## Design Document
+
+- Read the full architecture and scaling notes in [docs/design-doc.md](docs/design-doc.md).
